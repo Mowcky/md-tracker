@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mixed Delivery Invoice Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,500;7..72,650&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F3ECDF; --paper:#FBF7F0; --ink:#3B2A20; --muted:#7A6758; --line:#DCCDB4;
+  --moss:#5B6A3C; --moss-soft:#E3E6D2; --dusty:#6F8BA3; --dusty-soft:#DDE6EE;
+  --champ:#E4CF9F; --champ-soft:#F3E8CC; --warn:#9A4A35; --warn-soft:#F2DDD3;
+  --serif:"Literata", Georgia, "Times New Roman", serif;
+  --sans:"Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1D1713; --paper:#28201A; --ink:#EFE5D5; --muted:#B2A08D; --line:#45382C;
+    --moss:#A3B37A; --moss-soft:#333724; --dusty:#9FB6CA; --dusty-soft:#25313B;
+    --champ:#C9AF73; --champ-soft:#3A3122; --warn:#E19A80; --warn-soft:#432820;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1D1713; --paper:#28201A; --ink:#EFE5D5; --muted:#B2A08D; --line:#45382C;
+  --moss:#A3B37A; --moss-soft:#333724; --dusty:#9FB6CA; --dusty-soft:#25313B;
+  --champ:#C9AF73; --champ-soft:#3A3122; --warn:#E19A80; --warn-soft:#432820;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+.num{font-variant-numeric:tabular-nums}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--dusty);outline-offset:2px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+header.top{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:flex-end;justify-content:space-between;padding:8px 0 18px;border-bottom:2px solid var(--ink)}
+h1{font:650 clamp(26px,3.4vw,36px)/1.1 var(--serif);margin:0;letter-spacing:-.01em}
+.sub{color:var(--muted);margin:4px 0 0;font-size:14px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:7px 12px;cursor:pointer;font-weight:500;font-size:14px}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--moss);border-color:var(--moss);color:#FBF7F0}
+:root[data-theme="dark"] .btn.primary{color:#1D1713}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.primary{color:#1D1713}}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+select.btn{padding-right:8px}
+
+nav.tabs{display:flex;gap:4px;margin:18px 0 0;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:0;background:none;padding:10px 14px;cursor:pointer;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--moss)}
+
+.months{display:flex;gap:6px;flex-wrap:wrap;margin:18px 0 6px}
+.months button{border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:5px 12px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);position:relative}
+.months button.has{color:var(--ink)}
+.months button.has::after{content:"";position:absolute;right:5px;top:5px;width:5px;height:5px;border-radius:50%;background:var(--moss)}
+.months button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 0 20px}
+.strip div{background:var(--paper);padding:12px 16px}
+.strip b{display:block;font:650 22px/1.2 var(--serif)}
+.strip span{color:var(--muted);font-size:13px}
+
+.tablebox{overflow-x:auto;background:var(--paper);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:760px}
+th,td{padding:10px 12px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--paper);position:sticky;top:0}
+th:first-child,td:first-child{text-align:left}
+tbody tr:hover td{background:var(--champ-soft)}
+tbody tr{cursor:pointer}
+tfoot td{font-weight:700;border-bottom:0;border-top:2px solid var(--ink)}
+td.site{font-weight:600}
+td.empty{color:var(--muted);font-style:italic}
+.delta{font-size:12px;margin-left:4px}
+.delta.up{color:var(--moss)} .delta.down{color:var(--warn)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.st-none{background:transparent;color:var(--muted);border:1px dashed var(--line)}
+.st-draft{background:var(--champ-soft);color:var(--ink)}
+.st-ready{background:var(--dusty-soft);color:var(--dusty)}
+.st-submitted{background:var(--dusty);color:var(--paper)}
+.st-paid{background:var(--moss);color:var(--paper)}
+.copy{border:0;background:none;cursor:pointer;font-weight:700;padding:2px 4px;border-radius:4px}
+.copy:hover{background:var(--moss-soft)}
+.neg{color:var(--warn)}
+.grid td{cursor:pointer}
+.grid td.cell:hover{outline:2px solid var(--dusty);outline-offset:-2px}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px}
+.card h3{font:650 18px/1.2 var(--serif);margin:0 0 10px;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dotted var(--line);font-size:14px}
+.kv:last-child{border:0}
+.kv span{color:var(--muted)}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:8px 0 2px}
+.bar i{display:block;height:100%;background:var(--moss)}
+.note{color:var(--muted);font-size:13.5px}
+.empty-state{padding:40px 20px;text-align:center;background:var(--paper);border:1px dashed var(--line);border-radius:8px}
+.empty-state p{max-width:52ch;margin:6px auto 16px;color:var(--muted)}
+.ratebox{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:22px}
+h2{font:650 21px/1.2 var(--serif);margin:26px 0 12px}
+
+/* drawer */
+.scrim{position:fixed;inset:0;background:rgba(30,20,14,.45);display:none;z-index:20}
+.scrim.open{display:block}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--bg);z-index:21;transform:translateX(100%);transition:transform .22s ease;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer.open{transform:none}
+@media (prefers-reduced-motion: reduce){.drawer{transition:none}}
+.dhead{padding:18px 22px 12px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dhead h2{margin:0}
+.dbody{padding:18px 22px;overflow-y:auto;flex:1}
+.dfoot{padding:12px 22px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;background:var(--paper)}
+label.f{display:block;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:4px}
+input.in,select.in,textarea.in{width:100%;border:1px solid var(--line);background:var(--paper);border-radius:6px;padding:8px 10px}
+input.in:focus,select.in:focus,textarea.in:focus{border-color:var(--dusty);outline:none;box-shadow:0 0 0 3px var(--dusty-soft)}
+input.in[type=number]{text-align:right}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px}
+.slots{width:100%;border-collapse:collapse;margin-bottom:6px;min-width:0}
+.slots th,.slots td{padding:6px 4px;border-bottom:1px solid var(--line)}
+.slots td:first-child{font-weight:600;font-size:14px;white-space:normal}
+.slots input{max-width:120px}
+.slots .rowtotal{min-width:96px}
+.custom{font-size:11px;color:var(--dusty);display:block;font-weight:500}
+
+/* the receipt — the one bold thing */
+.receipt{background:var(--paper);border:1px solid var(--line);border-radius:4px;margin:16px 0;padding:16px 18px 0;position:relative;font-size:14.5px}
+.receipt::after{content:"";position:absolute;left:0;right:0;bottom:-8px;height:8px;background:radial-gradient(circle at 6px -2px,transparent 7px,var(--paper) 7.5px) 0 0/12px 8px repeat-x}
+.receipt .ln{display:flex;justify-content:space-between;padding:5px 0}
+.receipt .ln.sub{border-top:1px dashed var(--line);font-weight:600}
+.receipt .ln span:first-child{color:var(--muted)}
+.receipt .ln.sub span:first-child{color:var(--ink)}
+.receipt .total{margin:10px -18px 0;padding:14px 18px 18px;background:var(--champ-soft);border-top:2px solid var(--ink)}
+.receipt .total small{display:block;color:var(--muted);font-weight:600;font-size:12.5px}
+.receipt .total .amt{font:650 34px/1.15 var(--serif);border:0;background:none;padding:0;cursor:pointer;color:var(--ink)}
+.receipt .total .amt:hover{color:var(--moss)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:3px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:6px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+.toast.show{opacity:1}
+.sync{font-size:12.5px;color:var(--muted)}
+.sync i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--champ);margin-right:5px;vertical-align:1px}
+.sync.live i{background:var(--moss)}
+@media (max-width:560px){.row3{grid-template-columns:1fr 1fr}.wrap{padding:14px 14px 50px}}
+/* ---- v2 layout: sidebar + dashboard ---- */
+html,body{height:100%}
+.app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100%}
+.side{background:var(--paper);border-right:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);height:100vh;max-height:100vh;overflow-y:auto;display:flex;flex-direction:column;padding:20px 14px 16px}
+.brand{padding:0 8px 14px;border-bottom:2px solid var(--ink);margin-bottom:12px}
+.brand h1{font-size:23px}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.side select{width:100%;margin-bottom:10px}
+.navgroup{font-size:12.5px;color:var(--muted);font-weight:600;padding:14px 10px 4px}
+.nav-item{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:6px;cursor:pointer;font-weight:500;font-size:14.5px;color:var(--ink)}
+.nav-item:hover{background:var(--champ-soft)}
+.nav-item[aria-current="page"]{background:var(--ink);color:var(--paper)}
+.nav-item .dot{width:8px;height:8px;border-radius:50%;flex:none;border:1.5px solid var(--muted)}
+.dot.draft{background:var(--champ);border-color:var(--champ)}
+.dot.ready{background:var(--dusty-soft);border-color:var(--dusty)}
+.dot.submitted{background:var(--dusty);border-color:var(--dusty)}
+.dot.paid{background:var(--moss);border-color:var(--moss)}
+.nav-item[aria-current="page"] .dot{border-color:var(--paper)}
+.nav-add{margin:6px 10px 0;font-size:13.5px;color:var(--moss);font-weight:600;background:none;border:0;cursor:pointer;padding:4px 0;text-align:left}
+.side-foot{margin-top:auto;padding:14px 8px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.side-foot .toolbar .btn{flex:1;padding:6px 8px;font-size:13px}
+.main{padding:24px clamp(16px,3vw,36px) 60px;min-width:0}
+.pagehead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:6px}
+.pagehead h2{font-size:clamp(24px,3vw,30px);margin:0}
+.pagehead .note{margin:4px 0 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:4px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.dashgrid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-bottom:22px}
+.panel{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.panel h3{font:650 17px/1.2 var(--serif);margin:0 0 10px}
+.chart svg{width:100%;height:auto;display:block}
+.chart .bar{cursor:pointer}
+.chart .bar:hover rect.b{opacity:.8}
+.alerts{list-style:none;margin:0;padding:0}
+.alerts li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dotted var(--line);font-size:14px}
+.alerts li:last-child{border:0}
+.alerts .btn{padding:3px 10px;font-size:12.5px;flex:none}
+.alerts .ok{color:var(--moss);font-weight:600}
+.pcard{background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 16px;cursor:pointer;text-align:left;width:100%;display:block}
+.pcard:hover{border-color:var(--ink)}
+.pcard .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px}
+.pcard .name{font:650 17px/1.25 var(--serif)}
+.pcard .amt{font:650 22px/1.2 var(--serif)}
+.pcard .meta{color:var(--muted);font-size:13px;margin-top:2px}
+.pcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.info{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;margin:16px 0 22px}
+.info dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.info dt{color:var(--muted)}
+.info dd{margin:0;overflow-wrap:anywhere}
+.ledger td.mo{font-weight:600}
+.paidcell input{width:124px;padding:4px 6px;text-align:left;font-size:13.5px}
+.ledger th,.ledger td{padding:9px 7px}
+.ledger{font-size:14px}
+.pay{font-size:14px;min-width:980px}
+.pay td{vertical-align:middle;padding:7px 8px}
+.pay td.l,.pay th.l{text-align:left}
+.pay input.in{padding:5px 7px;font-size:13.5px}
+.pay input[type=date]{width:136px}
+.pay input.amt{width:120px}
+.pay input.nt{width:100%;min-width:220px}
+.pay tr.grp td{background:var(--champ-soft);font-weight:700;border-top:2px solid var(--line)}
+.pay tr.grp td .copy{font-weight:700}
+.pay tr{cursor:default}
+.pay .diff{display:block;font-size:11.5px;color:var(--warn);font-weight:600}
+.pay .open-btn{padding:3px 9px;font-size:12px}
+.rec{font-size:14px;min-width:960px}
+.rec td{vertical-align:middle;padding:8px}
+.rec td.l,.rec th.l{text-align:left}
+.rec tr{cursor:default}
+.rec input.in{padding:5px 7px;font-size:13.5px}
+.rec input.amt{width:130px}
+.rec input[type=date]{width:136px}
+.rec input.nt{width:100%;min-width:200px}
+.rec input[type=checkbox]{width:18px;height:18px;accent-color:var(--moss);cursor:pointer}
+.rec tr.done td{background:var(--moss-soft)}
+.badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap}
+.b-match{background:var(--moss);color:var(--paper)}
+.b-off{background:var(--warn-soft);color:var(--warn)}
+.b-none{border:1px dashed var(--line);color:var(--muted)}
+.recbanner{padding:12px 16px;border-radius:8px;margin:0 0 16px;font-weight:600;border:1px solid var(--line);background:var(--paper)}
+.recbanner.ok{background:var(--moss-soft);border-color:var(--moss);color:var(--moss)}
+.recbanner.off{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.agecell .calc{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.agecell b{display:block;font-weight:600}
+.ledger .pill{font-size:11.5px;padding:2px 7px}
+.ledger td.paidcell,.ledger th.paidh{text-align:left}
+.paidcell .on{color:var(--moss);font-weight:700;display:block;font-size:12px}
+th.paidh{color:var(--moss)}
+.ledger td .btn{padding:3px 10px;font-size:12.5px}
+.ledger tr.blank td{color:var(--muted)}
+.ledger tr.blank td[colspan]{text-align:left}
+.info .strip{grid-template-columns:1fr 1fr}
+.actionbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:flex-end;margin:-6px 0 14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.ab-note{font-size:12.5px;color:var(--muted);margin-right:auto}
+.ab-note.warn{color:var(--warn);font-weight:600}
+.side-foot .toolbar{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.side-foot .toolbar .btn{white-space:nowrap}
+@media (max-width:820px){.side-foot .toolbar{display:flex}}
+@media (max-width:900px){.dashgrid,.info{grid-template-columns:1fr}}
+@media (max-width:820px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;max-height:none;border-right:0;border-bottom:1px solid var(--line);padding:14px}
+  .side nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px}
+  .navgroup{display:none}
+  .nav-item{width:auto;white-space:nowrap;flex:none}
+  .nav-add{flex:none;white-space:nowrap;margin:0 6px}
+  .side-foot{flex-direction:row;flex-wrap:wrap;align-items:center}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><h1>Mixed Delivery</h1><p>Invoice tracker</p></div>
+    <select id="fySel" class="btn" aria-label="Fiscal year"></select>
+    <nav id="sideNav" aria-label="Pages"></nav>
+    <div class="side-foot">
+      <span id="sync" class="sync"><i></i>Saved in this browser</span>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+    </div>
+  </aside>
+  <main class="main">
+    <div class="actionbar" role="toolbar" aria-label="Data">
+      <span class="ab-note" id="lastBackup"></span>
+      <button class="btn" id="exportCsv" title="Download an Excel workbook of the selected fiscal year">⤓ Export to Excel</button>
+      <button class="btn" id="backupBtn" title="Save a backup file of all programs and payments">Back up</button>
+      <button class="btn" id="restoreBtn" title="Load a backup file">Restore</button>
+    </div>
+    <div id="view"></div>
+  </main>
+</div>
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-labelledby="dTitle"></aside>
+<div class="toast" id="toast" role="status"></div>
+<script>
+/* ---------- constants ---------- */
+const AGES = [
+  {k:"infant", label:"Infant"},
+  {k:"toddler", label:"Toddler"},
+  {k:"twoyo", label:"2YO"},
+  {k:"pk", label:"Preschool (3–5, not K)"}
+];
+const DEFAULT_RATES = {infant:2405, toddler:2080, twoyo:1587.08, pk:1430};
+const STATUSES = [
+  {k:"draft", label:"Draft"},
+  {k:"ready", label:"Ready to submit"},
+  {k:"submitted", label:"Submitted"},
+  {k:"paid", label:"Paid"}
+];
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const LS_KEY = "md-invoice-tracker-v1";
+
+/* ---------- state ---------- */
+const S = {
+  sites:{}, invoices:{}, settings:{rates:{...DEFAULT_RATES}},
+  db:null, canWrite:true,
+  tab:"month", fy:null, month:null, gridMetric:"submitted"
+};
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const r2 = n => Math.round((Number(n)||0)*100)/100;
+const money = n => { n = r2(n); const s = Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); return (n<0?"−$":"$")+s; };
+const moneyPlain = n => r2(n).toFixed(2);
+const fmtDate = d => { if(!d) return ""; const [y,m,dd]=d.split("-").map(Number); return MONTH_NAMES[m-1]+" "+dd+", "+y; };
+const ymLabel = ym => { const [y,m] = ym.split("-").map(Number); return MONTH_NAMES[m-1]+" "+y; };
+const ymLong = ym => { const [y,m] = ym.split("-").map(Number); return new Date(y,m-1,1).toLocaleString("en-US",{month:"long",year:"numeric"}); };
+const fyLabel = fy => "FY"+String((fy+1)%100).padStart(2,"0");
+const fyMonths = fy => { const out=[]; for(let i=0;i<12;i++){ const m=(6+i)%12+1, y = i<6?fy:fy+1; out.push(y+"-"+String(m).padStart(2,"0")); } return out; };
+const fyOf = ym => { const [y,m] = ym.split("-").map(Number); return m>=7?y:y-1; };
+const prevYm = ym => { let [y,m] = ym.split("-").map(Number); m--; if(m===0){m=12;y--;} return y+"-"+String(m).padStart(2,"0"); };
+const invId = (siteId, ym) => siteId+"__"+ym;
+const slug = s => (s.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "site")+"-"+Math.random().toString(36).slice(2,6);
+const sitesSorted = () => Object.values(S.sites).sort((a,b)=>(a.order??99)-(b.order??99) || a.name.localeCompare(b.name));
+const activeSites = () => sitesSorted().filter(s=>s.active!==false);
+
+function calc(inv){
+  if(!inv) return null;
+  let gross=0, slots=0;
+  AGES.forEach(a=>{ const l=inv.lines?.[a.k]||{}; const s=Number(l.slots)||0; slots+=s; gross+=r2(s*(Number(l.rate)||0)); });
+  gross=r2(gross);
+  const copays=r2(inv.copays), advance=r2(inv.advance), repayment=r2(inv.repayment);
+  const afterCopays=r2(gross-copays);
+  const beforeRepay=r2(afterCopays+advance);
+  const submitted=r2(beforeRepay-repayment);
+  return {slots,gross,copays,afterCopays,advance,beforeRepay,repayment,submitted};
+}
+function paidAmountOf(inv){ if(!inv||inv.status!=="paid") return 0; if(inv.paidAmount!==undefined && inv.paidAmount!==null && inv.paidAmount!=="") return r2(inv.paidAmount); return calc(inv).submitted; }
+function repaidSoFar(siteId, excludeId){
+  return r2(Object.values(S.invoices).filter(i=>i.siteId===siteId && i.id!==excludeId).reduce((t,i)=>t+(Number(i.repayment)||0),0));
+}
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),1800); }
+async function copyAmount(n){
+  const txt = moneyPlain(n);
+  try{ await navigator.clipboard.writeText(txt); toast("Copied "+money(n)); }
+  catch{ const ta=document.createElement("textarea"); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand("copy"); toast("Copied "+money(n));}catch{toast("Copy not available here");} ta.remove(); }
+}
+
+/* ---------- storage: shared db when available, browser storage otherwise ---------- */
+function saveLocal(){
+  if(S.db) return;
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({sites:S.sites,invoices:S.invoices,settings:S.settings})); }catch{}
+}
+function loadLocal(){
+  try{ const raw=localStorage.getItem(LS_KEY); if(!raw) return; const d=JSON.parse(raw); S.sites=d.sites||{}; S.invoices=d.invoices||{}; S.settings=d.settings||S.settings; }catch{}
+}
+async function putDoc(coll, id, data){
+  if(S.db){
+    try{ await S.db.collection(coll).doc(id).set(data); }
+    catch(e){ handleDbError(e); throw e; }
+  } else saveLocal();
+}
+async function delDoc(coll, id){
+  if(S.db){ try{ await S.db.collection(coll).doc(id).delete(); }catch(e){ handleDbError(e); throw e; } }
+  else saveLocal();
+}
+function handleDbError(e){
+  if(e && e.code==="invalid_argument"){ S.canWrite=false; toast("You have view-only access"); render(); }
+  else if(e && e.code==="quota_exceeded") toast("Storage is full — remove old data");
+  else toast("Couldn't save — try again");
+}
+async function saveSite(site){ S.sites[site.id]=site; render(); await putDoc("sites",site.id,site); }
+async function saveInvoice(inv){ inv.updatedAt=new Date().toISOString(); S.invoices[inv.id]=inv; setTimeout(render,0); await putDoc("invoices",inv.id,inv); }
+async function deleteInvoice(id){ delete S.invoices[id]; render(); await delDoc("invoices",id); }
+async function saveSettings(){ render(); await putDoc("settings","main",S.settings); }
+
+async function connectDb(){
+  if(!window.claude || typeof window.claude.use!=="function") return;
+  let db=null;
+  try{ db = await window.claude.use("db"); }catch{ db=null; }
+  if(!db) return;
+  S.db=db;
+  try{
+    const user = await window.claude.use("user");
+    if(user){ const w = await user.can("data.write"); if(w===false) S.canWrite=false; }
+  }catch{}
+  const sync=$("#sync"); sync.classList.add("live"); sync.innerHTML="<i></i>Shared with your team";
+  // Start from the shared store, not this browser's copy.
+  S.sites={}; S.invoices={};
+  db.collection("sites").limit(200).onSnapshot(qs=>{ const o={}; qs.docs.forEach(d=>o[d.id]=d.data()); S.sites=o; render(); }, ()=>{});
+  db.collection("invoices").limit(1000).onSnapshot(qs=>{ const o={}; qs.docs.forEach(d=>o[d.id]=d.data()); S.invoices=o; render(); }, ()=>{});
+  db.doc("settings/main").onSnapshot(s=>{ if(s.exists){ S.settings={rates:{...DEFAULT_RATES,...(s.data().rates||{})}}; render(); } }, ()=>{});
+}
+
+/* ---------- rendering ---------- */
+S.view="dash";
+function todayYm(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function render(){
+  const ae=document.activeElement, keep= ae && ae.dataset && (ae.dataset.pay||ae.dataset.paid||ae.dataset.rec) ? (ae.dataset.pay?'[data-pay="'+ae.dataset.pay+'"]':ae.dataset.rec?'[data-rec="'+ae.dataset.rec+'"]':'[data-paid="'+ae.dataset.paid+'"]') : null;
+  renderFySelect(); renderNav();
+  const v=$("#view");
+  if(S.view==="dash") v.innerHTML=viewDash();
+  else if(S.view==="year") v.innerHTML=viewYear();
+  else if(S.view==="settings") v.innerHTML=viewSettings();
+  else if(S.view==="payments") v.innerHTML=viewPayments();
+  else if(S.view==="reconcile") v.innerHTML=viewReconcile();
+  else if(S.view.startsWith("p:")){ const site=S.sites[S.view.slice(2)]; v.innerHTML= site? viewProgram(site) : viewDash(); }
+  if(keep){ const el=document.querySelector(keep); if(el) el.focus(); }
+}
+function renderFySelect(){
+  const fys=new Set([S.fy, fyOf(todayYm())]);
+  Object.values(S.invoices).forEach(i=>fys.add(fyOf(i.month)));
+  for(let k=-1;k<=2;k++) fys.add(fyOf(todayYm())+k);
+  const sel=$("#fySel");
+  const html=[...fys].sort().map(f=>`<option value="${f}" ${f===S.fy?"selected":""}>${fyLabel(f)} (Jul ${String(f).slice(2)}–Jun ${String(f+1).slice(2)})</option>`).join("");
+  if(sel.innerHTML!==html) sel.innerHTML=html;
+}
+function renderNav(){
+  const cur=S.view, item=(go,label,extra="")=>`<button class="nav-item" data-go="${esc(go)}" ${cur===go?'aria-current="page"':""}><span>${label}</span>${extra}</button>`;
+  const progs=activeSites().map(s=>{ const inv=S.invoices[invId(s.id,S.month)]; return item("p:"+s.id, esc(s.name), `<span class="dot ${inv?inv.status:""}" title="${ymLabel(S.month)}: ${inv?(STATUSES.find(x=>x.k===inv.status)?.label):"no invoice"}"></span>`); }).join("");
+  $("#sideNav").innerHTML=`
+    <div class="navgroup">Overview</div>
+    ${item("dash","Dashboard")}${item("payments","Payments")}${item("reconcile","Reconcile")}${item("year","All programs by month")}
+    <div class="navgroup">Programs · ${ymLabel(S.month).split(" ")[0]} status</div>
+    ${progs}
+    ${S.canWrite?`<button class="nav-add" data-act="addSite">+ Add a program</button>`:""}
+    <div class="navgroup">Setup</div>
+    ${item("settings","Rates & programs")}`;
+}
+function monthChips(){
+  return `<div class="months" role="group" aria-label="Month">`+fyMonths(S.fy).map(ym=>{
+    const has=activeSites().some(s=>S.invoices[invId(s.id,ym)]);
+    return `<button data-month="${ym}" class="${has?"has":""}" aria-pressed="${ym===S.month}">${ymLabel(ym).split(" ")[0]}</button>`;
+  }).join("")+`</div>`;
+}
+function statusPill(inv){
+  if(!inv) return `<span class="pill st-none">Not entered</span>`;
+  const s=STATUSES.find(x=>x.k===inv.status)||STATUSES[0];
+  return `<span class="pill st-${s.k}">${s.label}</span>`;
+}
+function emptyPrograms(){
+  return `<div class="empty-state"><h2 style="margin-top:0">Add your first program</h2><p>Each program gets its own page with contact details, a repayment plan if it has one, and a payment entry for every month.</p><button class="btn primary" data-act="addSite">Add a program</button></div>`;
+}
+const fyTotals = siteId => { const t={slots:0,gross:0,copays:0,advance:0,repayment:0,submitted:0,count:0,paid:0};
+  fyMonths(S.fy).forEach(ym=>{ const inv=S.invoices[invId(siteId,ym)]; const c=calc(inv); if(!c) return; t.count++; if(inv.status==="paid"){ t.paid++; t.paidAmt=(t.paidAmt||0)+paidAmountOf(inv); } ["gross","copays","advance","repayment","submitted"].forEach(k=>t[k]+=c[k]); });
+  return t; };
+const kfmt = n => Math.abs(n)>=1000? "$"+(n/1000).toFixed(n>=100000?0:1)+"k" : "$"+Math.round(n);
+
+/* ---------- dashboard ---------- */
+function viewDash(){
+  const sites=activeSites();
+  if(!sites.length) return `<div class="pagehead"><div><h2>Dashboard</h2></div></div>`+emptyPrograms();
+  const months=fyMonths(S.fy), ym=S.month;
+  const monthTot=months.map(m=>r2(sites.reduce((t,s)=>t+(calc(S.invoices[invId(s.id,m)])?.submitted||0),0)));
+  const fyTot=r2(monthTot.reduce((a,b)=>a+b,0));
+  let mt={submitted:0,slots:0,copays:0}, entered=0, paid=0;
+  sites.forEach(s=>{ const inv=S.invoices[invId(s.id,ym)], c=calc(inv); if(!c) return; entered++; if(inv.status==="paid") paid++; mt.submitted+=c.submitted; mt.slots+=c.slots; mt.copays+=c.copays; });
+
+  // chart
+  const W=720,H=230,pl=8,pr=8,pt=26,pb=28, bw=(W-pl-pr)/12, max=Math.max(...monthTot,1);
+  const bars=months.map((m,i)=>{
+    const v=monthTot[i], h=v? Math.max(3,(H-pt-pb)*v/max):0, x=pl+i*bw+bw*0.18, w=bw*0.64, y=H-pb-h, sel=m===ym;
+    return `<g class="bar" data-month="${m}" role="button" tabindex="0" aria-label="${ymLong(m)}: ${money(v)}">
+      <rect x="${pl+i*bw}" y="${pt-20}" width="${bw}" height="${H-pt+20}" fill="transparent"/>
+      ${v?`<rect class="b" x="${x}" y="${y}" width="${w}" height="${h}" rx="3" fill="${sel?"var(--ink)":"var(--moss)"}"/>
+      <text x="${x+w/2}" y="${y-6}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="Public Sans, sans-serif">${kfmt(v)}</text>`
+      :`<rect x="${x}" y="${H-pb-2}" width="${w}" height="2" fill="var(--line)"/>`}
+      <text x="${x+w/2}" y="${H-8}" text-anchor="middle" font-size="12.5" font-weight="${sel?700:500}" fill="${sel?"var(--ink)":"var(--muted)"}" font-family="Public Sans, sans-serif">${ymLabel(m).split(" ")[0]}</text></g>`;
+  }).join("");
+
+  // needs attention
+  const alerts=[];
+  sites.forEach(s=>{ if(!S.invoices[invId(s.id,ym)]) alerts.push(`<li><span>No ${ymLabel(ym).split(" ")[0]} payment entered for <b>${esc(s.name)}</b></span>${S.canWrite?`<button class="btn" data-enter="${esc(s.id)}|${ym}">Enter</button>`:""}</li>`); });
+  months.filter(m=>m<=ym).forEach(m=>sites.forEach(s=>{ const inv=S.invoices[invId(s.id,m)]; if(inv && (inv.status==="draft"||inv.status==="ready")) alerts.push(`<li><span><b>${esc(s.name)}</b> ${ymLabel(m).split(" ")[0]} is still ${inv.status==="draft"?"a draft":"ready to submit"}</span><button class="btn" data-enter="${esc(s.id)}|${m}">Open</button></li>`); }));
+  months.filter(m=>m<ym).forEach(m=>sites.forEach(s=>{ const inv=S.invoices[invId(s.id,m)]; if(inv && inv.status==="submitted") alerts.push(`<li><span><b>${esc(s.name)}</b> ${ymLabel(m).split(" ")[0]} submitted, not marked paid</span><button class="btn" data-enter="${esc(s.id)}|${m}">Open</button></li>`); }));
+  months.filter(m=>m<ym).forEach(m=>{ const all=sites.map(s=>S.invoices[invId(s.id,m)]).filter(Boolean); const left=all.filter(i=>!i.reconciled).length;
+    if(all.length && left) alerts.push(`<li><span>${ymLabel(m).split(" ")[0]} reconciliation: ${left} of ${all.length} programs not reconciled</span><button class="btn" data-go="reconcile" data-recmonth-go="${m}">Reconcile</button></li>`); });
+  sites.forEach(s=>{ if(Number(s.repayMonthly)>0){ const tot=Number(s.repayTotal)||0, done=repaidSoFar(s.id);
+    alerts.push(tot? `<li><span><b>${esc(s.name)}</b> repayment: ${money(Math.max(0,tot-done))} left of ${money(tot)}</span></li>`
+      : `<li><span><b>${esc(s.name)}</b> repayment: ${money(done)} repaid so far at ${money(s.repayMonthly)}/mo</span></li>`); } });
+
+  const cards=sites.map(s=>{
+    const inv=S.invoices[invId(s.id,ym)], c=calc(inv), pc=calc(S.invoices[invId(s.id,prevYm(ym))]);
+    let d=""; if(c&&pc){ const diff=c.slots-pc.slots; if(diff) d=` <span class="delta ${diff>0?"up":"down"}">${diff>0?"▲":"▼"}${Math.abs(diff)}</span>`; }
+    return `<button class="pcard" data-go="p:${esc(s.id)}">
+      <div class="top"><span class="name">${esc(s.name)}</span>${statusPill(inv)}</div>
+      <div class="amt num">${c?money(c.submitted):"—"}</div>
+      <div class="meta num">${c?`${c.slots} slots${d} · ${money(c.copays)} copays`:"No payment entered"}</div>
+      <div class="meta num">${inv&&inv.status==="paid"?`<span style="color:var(--moss);font-weight:600">Paid ${fmtDate(inv.paidDate)}</span>`:inv?"Not paid yet":""}</div>
+      <div class="meta num">${fyLabel(S.fy)} to date ${money(fyTotals(s.id).submitted)}</div>
+    </button>`; }).join("");
+
+  return `<div class="pagehead"><div><h2>Dashboard</h2><p class="note">${fyLabel(S.fy)} at a glance. Pick a month to see where each program stands.</p></div></div>
+  ${monthChips()}
+  <div class="strip">
+    <div><b class="num">${money(fyTot)}</b><span>${fyLabel(S.fy)} submitted to date</span></div>
+    <div><b class="num">${money(mt.submitted)}</b><span>${ymLong(ym)}</span></div>
+    <div><b class="num">${mt.slots}</b><span>Slots billed in ${ymLabel(ym).split(" ")[0]}</span></div>
+    <div><b class="num">${entered} of ${sites.length}</b><span>Payments entered · ${paid} paid</span></div>
+    <div><b class="num" style="color:var(--moss)">${money(sites.reduce((a,x)=>a+(fyTotals(x.id).paidAmt||0),0))}</b><span>${fyLabel(S.fy)} paid to date</span></div>
+  </div>
+  <div class="dashgrid">
+    <div class="panel chart"><h3>Submitted by month</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Total submitted per month">${bars}</svg></div>
+    <div class="panel"><h3>Needs attention</h3>${alerts.length?`<ul class="alerts">${alerts.slice(0,9).join("")}</ul>${alerts.length>9?`<p class="note">+${alerts.length-9} more</p>`:""}`:`<p class="ok" style="color:var(--moss);font-weight:600">Everything for ${ymLabel(ym).split(" ")[0]} is entered and up to date.</p>`}</div>
+  </div>
+  <h2 style="margin-top:0">Programs in ${ymLong(ym)}</h2>
+  <div class="pcards">${cards}</div>`;
+}
+
+/* ---------- program page ---------- */
+function viewProgram(site){
+  const t=fyTotals(site.id), months=fyMonths(S.fy), ym=S.month, inv=S.invoices[invId(site.id,ym)];
+  const info=[["Director / contact",site.contact],["Email",site.email?`<a href="mailto:${esc(site.email)}">${esc(site.email)}</a>`:""],["Phone",esc(site.phone||"")],["Address",esc(site.address||"")],["Portal / vendor ID",esc(site.portalId||"")]]
+    .map(([k,v])=>`<dt>${k}</dt><dd>${k==="Director / contact"?esc(v||""):v||""}${v?"":`<span class="note">—</span>`}</dd>`).join("");
+  let repay=`<p class="note" style="margin:10px 0 0">No repayment plan.</p>`;
+  if(Number(site.repayMonthly)>0){ const tot=Number(site.repayTotal)||0, done=repaidSoFar(site.id);
+    repay=`<h3 style="margin:16px 0 6px">Repayment plan</h3>
+    <div class="kv"><span>Monthly</span><b class="num">${money(site.repayMonthly)} from ${site.repayStartMonth?ymLabel(site.repayStartMonth):"—"}</b></div>
+    <div class="kv"><span>Repaid so far</span><b class="num">${money(done)}${tot?" of "+money(tot):""}</b></div>
+    ${tot?`<div class="bar" aria-hidden="true"><i style="width:${Math.min(100,done/tot*100)}%"></i></div><div class="note">${money(Math.max(0,tot-done))} remaining</div>`:`<p class="note">${site.repayEndMonth?`Deduction runs through ${ymLabel(site.repayEndMonth)}.`:"Total owed not set. The deduction continues each month until you add a total or end month."}</p>`}`; }
+
+  let foot={infant:0,toddler:0,twoyo:0,pk:0,slots:0,gross:0,copays:0,advance:0,repayment:0,submitted:0};
+  const rows=months.map(m=>{
+    const i=S.invoices[invId(site.id,m)], c=calc(i);
+    if(!c) return `<tr class="blank" data-enter="${esc(site.id)}|${m}"><td class="mo">${ymLabel(m)}</td><td colspan="11">${S.canWrite?`<button class="btn" data-enter="${esc(site.id)}|${m}">Enter payment</button>`:"—"}</td><td>${statusPill()}</td></tr>`;
+    AGES.forEach(a=>{ const n=Number(i.lines?.[a.k]?.slots)||0; foot[a.k]+=n; foot[a.k+"$"]=(foot[a.k+"$"]||0)+n*(Number(i.lines?.[a.k]?.rate)||0); });
+    ["slots","gross","copays","advance","repayment","submitted"].forEach(k=>foot[k]+=c[k]);
+    return `<tr data-enter="${esc(site.id)}|${m}"><td class="mo">${ymLabel(m)}</td>
+      ${AGES.map(a=>{ const n=Number(i.lines?.[a.k]?.slots)||0, r=Number(i.lines?.[a.k]?.rate)||0; return n?`<td class="num agecell"><span class="calc">${n} × ${money(r)}</span><b>${money(n*r)}</b></td>`:`<td class="num agecell">—</td>`; }).join("")}
+      <td class="num"><b>${c.slots}</b></td><td class="num">${money(c.gross)}</td>
+      <td class="num">${c.copays?money(-c.copays):"—"}</td>
+      <td class="num ${c.advance<0?"neg":""}">${c.advance?money(c.advance):"—"}</td>
+      <td class="num">${c.repayment?money(-c.repayment):"—"}</td>
+      <td class="num"><button class="copy num" data-copy="${c.submitted}" title="Copy amount">${money(c.submitted)}</button></td>
+      <td class="paidcell">${S.canWrite?`<input class="in" type="date" data-paid="${esc(i.id)}" value="${i.paidDate||""}" aria-label="Date paid for ${ymLabel(m)}">`:(i.paidDate?fmtDate(i.paidDate):"—")}</td>
+      <td>${statusPill(i)}</td></tr>`;
+  }).join("");
+
+  return `<div class="pagehead"><div><h2>${esc(site.name)}</h2><p class="note">${t.count} of 12 payments entered for ${fyLabel(S.fy)} · ${t.paid} paid</p></div>
+    <div class="toolbar">${S.canWrite?`<button class="btn" data-editsite="${esc(site.id)}">Edit program info</button><button class="btn primary" data-enter="${esc(site.id)}|${ym}">${inv?"Edit":"Enter"} ${ymLabel(ym).split(" ")[0]} payment</button>`:""}</div></div>
+  <div class="info">
+    <div class="panel"><h3>Program info</h3><dl>${info}</dl>${site.notes?`<p class="note" style="margin-bottom:0">${esc(site.notes)}</p>`:""}${repay}</div>
+    <div>
+      <div class="strip" style="margin-top:0">
+        <div><b class="num">${money(t.submitted)}</b><span>${fyLabel(S.fy)} submitted</span></div>
+        <div><b class="num">${money(t.count? t.submitted/t.count:0)}</b><span>Average per month</span></div>
+        <div><b class="num">${money(t.copays)}</b><span>Copays this FY</span></div>
+        <div><b class="num">${money(t.advance)}</b><span>Advance adjustments</span></div>
+        <div><b class="num" style="color:var(--moss)">${money(t.paidAmt||0)}</b><span>Paid (${t.paid} month${t.paid===1?"":"s"})</span></div>
+        <div><b class="num">${money(t.submitted-(t.paidAmt||0))}</b><span>Awaiting payment</span></div>
+      </div>
+      <div class="panel"><h3>Rates on the latest payment</h3>${(()=>{ const last=Object.values(S.invoices).filter(i=>i.siteId===site.id).sort((a,b)=>b.month.localeCompare(a.month))[0];
+        return AGES.map(a=>{ const r= last?.lines?.[a.k]?.rate ?? S.settings.rates[a.k]; return `<div class="kv"><span>${a.label}</span><b class="num">${money(r)}${Number(r)!==Number(S.settings.rates[a.k])?` <span class="custom" style="display:inline">custom</span>`:""}</b></div>`; }).join(""); })()}</div>
+    </div>
+  </div>
+  <h2>${fyLabel(S.fy)} payments</h2>
+  <div class="tablebox"><table class="ledger" style="min-width:1150px">
+    <thead><tr><th>Month</th>${AGES.map(a=>`<th>${a.k==="pk"?"PK":a.label}</th>`).join("")}<th>Slots</th><th>Gross</th><th>Copays</th><th>Advance</th><th>Repayment</th><th>Submitted</th><th class="paidh" style="text-align:left">Date paid</th><th>Status</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td>Total</td>${AGES.map(a=>`<td class="num agecell"><span class="calc">${foot[a.k]} slot${foot[a.k]===1?"":"s"}</span><b>${money(foot[a.k+"$"]||0)}</b></td>`).join("")}<td class="num">${foot.slots}</td><td class="num">${money(foot.gross)}</td><td class="num">${money(-foot.copays)}</td><td class="num">${money(foot.advance)}</td><td class="num">${money(-foot.repayment)}</td><td class="num">${money(foot.submitted)}</td><td class="num" style="text-align:left;color:var(--moss)">${money(t.paidAmt||0)} paid</td><td></td></tr></tfoot>
+  </table></div>
+  <p class="note">Enter a date in Date paid to mark that month paid; clear it to undo. Each age group shows slots × rate and the amount. Click a month to enter or edit its payment; click a submitted amount to copy it.</p>`;
+}
+
+/* ---------- payments overview ---------- */
+function viewPayments(){
+  const sites=activeSites(); if(!sites.length) return emptyPrograms();
+  const all=S.payMonth==="all"||!S.payMonth, months= all? fyMonths(S.fy) : [S.payMonth];
+  const ro=S.canWrite?"":"disabled";
+  let T={sub:0,paid:0,n:0,np:0};
+  const groups=sites.map(site=>{
+    let g={sub:0,paid:0}; const rows=[];
+    months.forEach(m=>{
+      const inv=S.invoices[invId(site.id,m)]; if(!inv) return;
+      const c=calc(inv), pa=paidAmountOf(inv);
+      g.sub+=c.submitted; g.paid+=pa; T.n++; if(inv.status==="paid") T.np++;
+      const custom= inv.status==="paid" && inv.paidAmount!==undefined && inv.paidAmount!==null && inv.paidAmount!=="" && r2(inv.paidAmount)!==c.submitted;
+      rows.push(`<tr>
+        <td class="l">${all?ymLabel(m):esc(site.name)}</td>
+        <td class="l"><input class="in" type="date" data-pay="${esc(inv.id)}|submittedDate" value="${inv.submittedDate||""}" ${ro} aria-label="Date submitted"></td>
+        <td class="num"><button class="copy num" data-copy="${c.submitted}" title="Copy amount">${money(c.submitted)}</button></td>
+        <td class="l"><input class="in" type="date" data-pay="${esc(inv.id)}|paidDate" value="${inv.paidDate||""}" ${ro} aria-label="Date paid"></td>
+        <td class="num"><input class="in num amt" type="number" step="0.01" data-pay="${esc(inv.id)}|paidAmount" value="${inv.status==="paid"?pa:""}" placeholder="—" ${ro} aria-label="Total paid">${custom?`<span class="diff">${money(pa-c.submitted)} vs submitted</span>`:""}</td>
+        <td class="l">${statusPill(inv)}</td>
+        <td class="l"><input class="in nt" type="text" data-pay="${esc(inv.id)}|notes" value="${esc(inv.notes||"")}" placeholder="Add a note" ${ro} aria-label="Notes"></td>
+      </tr>`);
+    });
+    T.sub+=g.sub; T.paid+=g.paid;
+    if(!rows.length) return all? "" : `<tr><td class="l">${esc(site.name)}</td><td colspan="6" class="l empty">No payment entered${S.canWrite?` · <button class="btn open-btn" data-enter="${esc(site.id)}|${months[0]}">Enter payment</button>`:""}</td></tr>`;
+    return all? `<tr class="grp"><td class="l" colspan="2"><button class="copy" data-go="p:${esc(site.id)}">${esc(site.name)}</button></td><td class="num">${money(g.sub)}</td><td></td><td class="num" style="color:var(--moss)">${money(g.paid)}</td><td class="l" colspan="2">${money(g.sub-g.paid)} awaiting</td></tr>`+rows.join("") : rows.join("");
+  }).join("");
+  const chips=`<div class="months" role="group" aria-label="Period"><button data-paymonth="all" aria-pressed="${all}">Whole year</button>`+fyMonths(S.fy).map(m=>`<button data-paymonth="${m}" aria-pressed="${!all&&m===S.payMonth}">${ymLabel(m).split(" ")[0]}</button>`).join("")+`</div>`;
+  return `<div class="pagehead"><div><h2>Payments</h2><p class="note">Date submitted, total submitted, date paid and total paid for each program. Changes save as you type.</p></div></div>
+  ${chips}
+  <div class="strip">
+    <div><b class="num">${money(T.sub)}</b><span>Total submitted</span></div>
+    <div><b class="num" style="color:var(--moss)">${money(T.paid)}</b><span>Total paid</span></div>
+    <div><b class="num">${money(T.sub-T.paid)}</b><span>Awaiting payment</span></div>
+    <div><b class="num">${T.np} of ${T.n}</b><span>Payments marked paid</span></div>
+  </div>
+  ${groups?`<div class="tablebox"><table class="pay">
+    <thead><tr><th class="l">${all?"Month":"Program"}</th><th class="l">Date submitted</th><th>Total submitted</th><th class="l">Date paid</th><th>Total paid</th><th class="l">Status</th><th class="l">Notes</th></tr></thead>
+    <tbody>${groups}</tbody>
+    <tfoot><tr><td class="l" colspan="2">Total</td><td class="num">${money(T.sub)}</td><td></td><td class="num" style="color:var(--moss)">${money(T.paid)}</td><td class="l" colspan="2">${money(T.sub-T.paid)} awaiting</td></tr></tfoot>
+  </table></div>`:`<div class="empty-state"><p>No payments entered for ${fyLabel(S.fy)} yet. Enter them from each program's page.</p></div>`}
+  <p class="note">Entering a date submitted marks the payment Submitted; entering a date paid marks it Paid. Total paid fills in with the submitted amount; change it if the payment received was different.</p>`;
+}
+
+/* ---------- month-end reconciliation ---------- */
+const hasBill = inv => inv && inv.billcomAmount!==undefined && inv.billcomAmount!==null && inv.billcomAmount!=="";
+function recState(inv){ if(!inv) return {k:"noinv"}; const c=calc(inv); if(!hasBill(inv)) return {k:"none",c}; const d=r2(Number(inv.billcomAmount)-c.submitted); return {k: d===0?"match":"off", d, c}; }
+function viewReconcile(){
+  const sites=activeSites(); if(!sites.length) return emptyPrograms();
+  if(!S.recMonth){ const pm=prevYm(todayYm()); S.recMonth= fyOf(pm)===S.fy? pm : S.month; }
+  const ym=S.recMonth, ro=S.canWrite?"":"disabled";
+  let T={inv:0,bill:0,invE:0,n:0,entered:0,matched:0,done:0};
+  const rows=sites.map(site=>{
+    const inv=S.invoices[invId(site.id,ym)], st=recState(inv);
+    if(st.k==="noinv") return `<tr><td class="l site">${esc(site.name)}</td><td colspan="7" class="l empty">No invoice entered for ${ymLabel(ym).split(" ")[0]}${S.canWrite?` · <button class="btn open-btn" data-enter="${esc(site.id)}|${ym}">Enter payment</button>`:""}</td></tr>`;
+    T.n++; T.inv+=st.c.submitted; if(st.k!=="none"){ T.entered++; T.bill+=Number(inv.billcomAmount); T.invE+=st.c.submitted; } if(st.k==="match") T.matched++; if(inv.reconciled) T.done++;
+    const badge= st.k==="match"?`<span class="badge b-match">Matches</span>` : st.k==="off"?`<span class="badge b-off">${st.d<0?"Short":"Over"} ${money(Math.abs(st.d))}</span>` : `<span class="badge b-none">Not entered</span>`;
+    return `<tr class="${inv.reconciled?"done":""}">
+      <td class="l site"><button class="copy" data-go="p:${esc(site.id)}" style="font-weight:600">${esc(site.name)}</button></td>
+      <td class="num"><b>${money(st.c.submitted)}</b></td>
+      <td class="num"><input class="in num amt" type="number" step="0.01" data-rec="${esc(inv.id)}|billcomAmount" value="${hasBill(inv)?inv.billcomAmount:""}" placeholder="0.00" ${ro} aria-label="Bill.com amount paid for ${esc(site.name)}"></td>
+      <td class="l"><input class="in" type="date" data-rec="${esc(inv.id)}|billcomDate" value="${inv.billcomDate||""}" ${ro} aria-label="Bill.com payment date"></td>
+      <td class="num ${st.k==="off"?"neg":""}">${st.k==="none"?"—":money(st.d)}</td>
+      <td class="l">${badge}</td>
+      <td style="text-align:center"><input type="checkbox" data-rec="${esc(inv.id)}|reconciled" ${inv.reconciled?"checked":""} ${ro} aria-label="Reconciled" title="${inv.reconciledDate?"Reconciled "+fmtDate(inv.reconciledDate):"Mark reconciled"}"></td>
+      <td class="l"><input class="in nt" type="text" data-rec="${esc(inv.id)}|reconNotes" value="${esc(inv.reconNotes||"")}" placeholder="Explain any difference" ${ro} aria-label="Reconciliation notes"></td>
+    </tr>`;
+  }).join("");
+  const diff=r2(T.bill-T.invE);
+  let banner;
+  if(!T.n) banner=`<div class="recbanner">No invoices entered for ${ymLong(ym)} yet.</div>`;
+  else if(T.done===T.n) banner=`<div class="recbanner ok">✓ ${ymLong(ym)} is fully reconciled (${T.n} of ${T.n} programs).</div>`;
+  else if(T.entered===T.n && diff===0) banner=`<div class="recbanner ok">Bill.com matches every invoice. Tick Reconciled on each row to close out ${ymLabel(ym).split(" ")[0]}.</div>`;
+  else banner=`<div class="recbanner ${T.entered&&T.matched<T.entered?"off":""}">${T.entered} of ${T.n} Bill.com amounts entered · ${T.matched} match · ${T.done} reconciled</div>`;
+  const chips=`<div class="months" role="group" aria-label="Month">`+fyMonths(S.fy).map(m=>{ const all=activeSites().map(s=>S.invoices[invId(s.id,m)]).filter(Boolean); const done=all.length&&all.every(i=>i.reconciled);
+    return `<button data-recmonth="${m}" class="${done?"has":""}" aria-pressed="${m===ym}" title="${done?"Reconciled":""}">${ymLabel(m).split(" ")[0]}${done?" ✓":""}</button>`; }).join("")+`</div>`;
+  return `<div class="pagehead"><div><h2>Reconcile</h2><p class="note">At month end, enter what Bill.com paid each program and compare it to what was invoiced.</p></div></div>
+  ${chips}
+  <div class="strip">
+    <div><b class="num">${money(T.inv)}</b><span>Invoiced for ${ymLong(ym)}</span></div>
+    <div><b class="num">${money(T.bill)}</b><span>Paid per Bill.com</span></div>
+    <div><b class="num ${diff?"neg":""}" style="${diff?"":"color:var(--moss)"}">${money(diff)}</b><span>Difference${T.entered&&T.entered<T.n?` (on the ${T.entered} entered)`:""}</span></div>
+    <div><b class="num">${T.done} of ${T.n}</b><span>Programs reconciled</span></div>
+  </div>
+  ${banner}
+  <div class="tablebox"><table class="rec">
+    <thead><tr><th class="l">Program</th><th>Invoiced</th><th>Bill.com paid</th><th class="l">Bill.com date</th><th>Difference</th><th class="l">Result</th><th style="text-align:center">Reconciled</th><th class="l">Notes</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td class="l">Total</td><td class="num">${money(T.inv)}</td><td class="num">${money(T.bill)}</td><td></td><td class="num ${diff?"neg":""}">${T.entered?money(diff):"—"}</td><td colspan="3"></td></tr></tfoot>
+  </table></div>
+  <p class="note">Invoiced is the total submitted on each program's payment. Difference is Bill.com minus invoiced, counting only programs with a Bill.com amount entered: a minus means the program was paid less than invoiced. Reconciling here doesn't change the payment itself; update Total paid on the Payments page if it should match Bill.com.</p>`;
+}
+
+/* ---------- all programs by month ---------- */
+function viewYear(){
+  const sites=activeSites(); if(!sites.length) return emptyPrograms();
+  const months=fyMonths(S.fy), m=S.gridMetric;
+  const fmt = n => m==="slots"? String(n) : money(n);
+  const colTot=months.map(()=>0); let grand=0;
+  const rows=sites.map(site=>{
+    let rowTot=0;
+    const cells=months.map((ym,i)=>{
+      const inv=S.invoices[invId(site.id,ym)], c=calc(inv);
+      if(!c) return `<td class="cell empty" data-enter="${esc(site.id)}|${ym}">—</td>`;
+      const val=c[m]; rowTot+=val; colTot[i]+=val;
+      return `<td class="cell num" data-enter="${esc(site.id)}|${ym}" title="${STATUSES.find(s=>s.k===inv.status)?.label||""}">${inv.status==="paid"?"✓ ":""}${fmt(val)}</td>`;
+    }).join("");
+    grand+=rowTot;
+    return `<tr><td class="site"><button class="copy" data-go="p:${esc(site.id)}" style="font-weight:600">${esc(site.name)}</button></td>${cells}<td class="num"><b>${fmt(rowTot)}</b></td></tr>`;
+  }).join("");
+  return `<div class="pagehead"><div><h2>All programs by month</h2><p class="note">✓ means paid. Click a cell to open that payment.</p></div>
+    <div class="toolbar"><label class="f" for="metric" style="margin:0">Show</label>
+    <select id="metric" class="btn">${["submitted","gross","copays","advance","repayment","slots"].map(k=>`<option value="${k}" ${k===m?"selected":""}>${{submitted:"Submitted amount",gross:"Gross (slots × rate)",copays:"Prorated copays",advance:"Advance adjustments",repayment:"Repayments",slots:"Slots billed"}[k]}</option>`).join("")}</select></div></div>
+  <div class="tablebox" style="margin-top:14px"><table class="grid" style="min-width:1100px">
+    <thead><tr><th>Program</th>${months.map(ym=>`<th>${ymLabel(ym).split(" ")[0]}</th>`).join("")}<th>${fyLabel(S.fy)} total</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td>Total</td>${colTot.map(n=>`<td class="num">${n?fmt(n):"—"}</td>`).join("")}<td class="num">${fmt(grand)}</td></tr></tfoot>
+  </table></div>`;
+}
+
+/* ---------- settings ---------- */
+function viewSettings(){
+  const r=S.settings.rates;
+  const list=sitesSorted().map(s=>`<div class="kv" style="padding:8px 0"><span style="color:var(--ink);font-weight:600">${esc(s.name)} ${s.active===false?`<span class="pill st-none">Inactive</span>`:""}</span>${S.canWrite?`<button class="btn" data-editsite="${esc(s.id)}">Edit</button>`:""}</div>`).join("");
+  return `<div class="pagehead"><div><h2>Rates &amp; programs</h2></div></div>
+  <h2 style="font-size:18px">Default slot rates</h2>
+  <p class="note" style="margin-top:-6px">A new payment uses the program's rates from its last payment. These defaults apply to a program's first payment, and any rate that differs is flagged.</p>
+  <div class="ratebox">${AGES.map(a=>`<div><label class="f" for="rate-${a.k}">${a.label}</label><input class="in num" type="number" step="0.01" id="rate-${a.k}" data-rate="${a.k}" value="${r[a.k]}" ${S.canWrite?"":"disabled"}></div>`).join("")}</div>
+  <div style="display:flex;justify-content:space-between;align-items:center"><h2 style="font-size:18px">Programs</h2>${S.canWrite?`<button class="btn primary" data-act="addSite">Add a program</button>`:""}</div>
+  <div class="panel">${list||`<p class="note">No programs yet.</p>`}</div>
+  <p class="note">Marking a program inactive hides it from the dashboard and sidebar but keeps its payment history.</p>`;
+}
+/* ---------- program info drawer ---------- */
+let siteDraft=null;
+function openSite(id){
+  siteDraft = id? {...S.sites[id]} : {id:null,name:"",active:true,notes:"",contact:"",email:"",phone:"",address:"",portalId:"",repayMonthly:0,repayTotal:0,repayStartMonth:"",order:Object.keys(S.sites).length};
+  const f=(key,label,type="text",ph="")=>`<div><label class="f" for="s-${key}">${label}</label><input class="in" id="s-${key}" type="${type}" data-s="${key}" value="${esc(siteDraft[key]||"")}" placeholder="${ph}"></div>`;
+  $("#drawer").innerHTML=`
+  <div class="dhead"><div><h2 id="dTitle">${id?"Edit program info":"Add a program"}</h2></div><button class="btn ghost" data-act="close">Close</button></div>
+  <div class="dbody">
+    <div style="margin-bottom:12px">${f("name","Program name")}</div>
+    <div class="row2">${f("contact","Director / contact")}${f("portalId","Portal / vendor ID","text","Optional")}</div>
+    <div class="row2">${f("email","Email","email")}${f("phone","Phone","tel")}</div>
+    <div style="margin-bottom:14px">${f("address","Address")}</div>
+    <h2 style="font-size:17px;margin:10px 0 4px">Monthly repayment</h2>
+    <p class="note" style="margin-top:0">For programs paying back an overpayment. The amount fills in on new payments from the start month until the total is repaid.</p>
+    <div class="row3">
+      <div><label class="f" for="rm">Amount per month</label><input class="in num" id="rm" type="number" step="0.01" min="0" data-s="repayMonthly" value="${siteDraft.repayMonthly||""}" placeholder="0.00"></div>
+      <div><label class="f" for="rt">Total owed</label><input class="in num" id="rt" type="number" step="0.01" min="0" data-s="repayTotal" value="${siteDraft.repayTotal||""}" placeholder="Optional"></div>
+      <div><label class="f" for="rs">Start month</label><input class="in" id="rs" type="month" data-s="repayStartMonth" value="${siteDraft.repayStartMonth||""}"></div>
+    </div>
+    <div class="row2"><div><label class="f" for="re">Last month</label><input class="in" id="re" type="month" data-s="repayEndMonth" value="${siteDraft.repayEndMonth||""}"><div class="hint">Optional. Use this or total owed, whichever you know.</div></div><div></div></div>
+    <label class="f" for="sno">Notes</label><textarea class="in" id="sno" rows="3" data-s="notes">${esc(siteDraft.notes||"")}</textarea>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px"><input type="checkbox" data-s="active" ${siteDraft.active!==false?"checked":""}> Active (shown on the dashboard and sidebar)</label>
+  </div>
+  <div class="dfoot"><div></div><div style="display:flex;gap:8px"><button class="btn" data-act="close">Cancel</button><button class="btn primary" data-act="saveSite">${id?"Save program":"Add program"}</button></div></div>`;
+  $("#drawer").classList.add("open"); $("#drawer").setAttribute("aria-hidden","false"); $("#scrim").classList.add("open");
+  setTimeout(()=>$("#s-name").focus(),50);
+}
+/* ---------- invoice drawer ---------- */
+let draft=null;
+function openInvoice(siteId, ym){
+  const site=S.sites[siteId]; if(!site) return;
+  const id=invId(siteId,ym), existing=S.invoices[id];
+  if(existing) draft=JSON.parse(JSON.stringify(existing));
+  else{
+    // rates carry over from the site's most recent earlier invoice, else defaults
+    const prior=Object.values(S.invoices).filter(i=>i.siteId===siteId && i.month<ym).sort((a,b)=>b.month.localeCompare(a.month))[0];
+    const lines={}; AGES.forEach(a=>lines[a.k]={slots:0, rate: prior?.lines?.[a.k]?.rate ?? S.settings.rates[a.k]});
+    let repayment=0;
+    if(Number(site.repayMonthly)>0 && (!site.repayStartMonth || ym>=site.repayStartMonth) && (!site.repayEndMonth || ym<=site.repayEndMonth)){
+      const total=Number(site.repayTotal)||0, left= total? total-repaidSoFar(siteId): Infinity;
+      repayment= r2(Math.max(0, Math.min(Number(site.repayMonthly), left)));
+    }
+    draft={id, siteId, month:ym, lines, copays:0, advance:0, repayment, status:"draft", submittedDate:"", paidDate:"", notes:"", isNew:true};
+  }
+  drawDrawer(); 
+  $("#drawer").classList.add("open"); $("#drawer").setAttribute("aria-hidden","false"); $("#scrim").classList.add("open");
+  setTimeout(()=>$("#drawer").querySelector("input")?.focus(),50);
+}
+function drawDrawer(){
+  const site=S.sites[draft.siteId], ro=S.canWrite?"":"disabled";
+  const prev=S.invoices[invId(draft.siteId, prevYm(draft.month))];
+  $("#drawer").innerHTML=`
+  <div class="dhead"><div><h2 id="dTitle">${esc(site.name)}</h2><div class="note">${ymLong(draft.month)} payment${draft.isNew?" · new":""}</div></div>
+    <button class="btn ghost" data-act="close" aria-label="Close">Close</button></div>
+  <div class="dbody">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><label class="f" style="margin:0">Slots from the Portal</label>
+      ${prev&&S.canWrite?`<button class="btn ghost" data-act="copyPrev" style="font-size:13px;padding:4px 10px">Copy ${ymLabel(prevYm(draft.month)).split(" ")[0]} slots &amp; rates</button>`:""}</div>
+    <table class="slots"><thead><tr><th style="text-align:left">Age group</th><th>Slots</th><th>Rate per slot</th><th>Amount</th></tr></thead><tbody>
+    ${AGES.map(a=>{const l=draft.lines[a.k]; const custom=Number(l.rate)!==Number(S.settings.rates[a.k]);
+      return `<tr><td>${a.label}${custom?`<span class="custom">differs from default ${money(S.settings.rates[a.k])}</span>`:""}</td>
+      <td><input class="in num" type="number" min="0" step="1" data-line="${a.k}" data-f="slots" value="${l.slots||""}" placeholder="0" ${ro} aria-label="${a.label} slots"></td>
+      <td><input class="in num" type="number" min="0" step="0.01" data-line="${a.k}" data-f="rate" value="${l.rate}" ${ro} aria-label="${a.label} rate"></td>
+      <td class="num rowtotal" data-linetotal="${a.k}">${money((Number(l.slots)||0)*(Number(l.rate)||0))}</td></tr>`}).join("")}
+    </tbody></table>
+    <div class="row3" style="margin-top:14px">
+      <div><label class="f" for="copays">Prorated copays</label><input class="in num" id="copays" type="number" min="0" step="0.01" data-top="copays" value="${draft.copays||""}" placeholder="0.00" ${ro}><div class="hint">From the Portal. Enter as a positive number.</div></div>
+      <div><label class="f" for="advance">Advance</label><input class="in num" id="advance" type="number" step="0.01" data-top="advance" value="${draft.advance||""}" placeholder="0.00" ${ro}><div class="hint">Use a minus sign when it reduces the invoice.</div></div>
+      <div><label class="f" for="repayment">Repayment</label><input class="in num" id="repayment" type="number" min="0" step="0.01" data-top="repayment" value="${draft.repayment||""}" placeholder="0.00" ${ro}><div class="hint">${Number(site.repayMonthly)>0?`Plan: ${money(site.repayMonthly)}/mo`:"No plan for this program"}</div></div>
+    </div>
+    <div id="receipt"></div>
+    <div class="row3" style="margin-top:22px">
+      <div><label class="f" for="status">Status</label><select class="in" id="status" data-top="status" ${ro}>${STATUSES.map(s=>`<option value="${s.k}" ${draft.status===s.k?"selected":""}>${s.label}</option>`).join("")}</select></div>
+      <div><label class="f" for="sd">Date submitted</label><input class="in" id="sd" type="date" data-top="submittedDate" value="${draft.submittedDate||""}" ${ro}></div>
+      <div><label class="f" for="pd">Date paid</label><input class="in" id="pd" type="date" data-top="paidDate" value="${draft.paidDate||""}" ${ro}></div>
+    </div>
+    <label class="f" for="notes">Notes</label><textarea class="in" id="notes" rows="3" data-top="notes" ${ro} placeholder="Corrections, Portal reference, follow-ups">${esc(draft.notes||"")}</textarea>
+  </div>
+  <div class="dfoot">
+    <div>${!draft.isNew&&S.canWrite?`<button class="btn danger" data-act="delInv">Delete payment</button>`:""}</div>
+    <div style="display:flex;gap:8px"><button class="btn" data-act="close">Cancel</button>${S.canWrite?`<button class="btn primary" data-act="saveInv">Save payment</button>`:""}</div>
+  </div>`;
+  drawReceipt();
+}
+function drawReceipt(){
+  const c=calc(draft);
+  AGES.forEach(a=>{ const el=document.querySelector(`[data-linetotal="${a.k}"]`); if(el){ const l=draft.lines[a.k]; el.textContent=money((Number(l.slots)||0)*(Number(l.rate)||0)); } });
+  $("#receipt").innerHTML=`<div class="receipt num">
+    <div class="ln"><span>Gross · ${c.slots} slot${c.slots===1?"":"s"}</span><span>${money(c.gross)}</span></div>
+    <div class="ln"><span>Prorated copays</span><span>${money(-c.copays)}</span></div>
+    <div class="ln sub"><span>Total after copays</span><span>${money(c.afterCopays)}</span></div>
+    <div class="ln"><span>Advance</span><span class="${c.advance<0?"neg":""}">${money(c.advance)}</span></div>
+    ${c.repayment?`<div class="ln sub"><span>Total before repayment</span><span>${money(c.beforeRepay)}</span></div>
+    <div class="ln"><span>Repayment</span><span>${money(-c.repayment)}</span></div>`:""}
+    <div class="total"><small>Total submitted for payment</small><button class="amt num" data-copy="${c.submitted}" title="Copy amount">${money(c.submitted)}</button></div>
+  </div>`;
+}
+function closeDrawer(){ $("#drawer").classList.remove("open"); $("#drawer").setAttribute("aria-hidden","true"); $("#scrim").classList.remove("open"); draft=null; siteDraft=null; }
+
+/* ---------- backup / export ---------- */
+async function offerDownload(filename, data, onSaved){
+  let dl=null; try{ if(window.claude?.use) dl=await window.claude.use("downloads"); }catch{}
+  if(dl){ try{ await dl.save({filename, data}); toast("Saved "+filename); onSaved&&onSaved(); }catch(e){ if(e?.code!=="declined") toast("Couldn't save the file"); } return; }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([data])); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000); onSaved&&onSaved();
+}
+function csvCell(v){ v=String(v??""); return /[",\n]/.test(v)? '"'+v.replace(/"/g,'""')+'"' : v; }
+function exportExcel(){
+  if(!window.XLSX){ exportCsv(); return; }
+  const months=fyMonths(S.fy), progs=sitesSorted();
+  const money$='"$"#,##0.00;[Red]-"$"#,##0.00';
+  // Sheet 1: every payment
+  const head=["Program","Month",...AGES.flatMap(a=>[a.label+" slots",a.label+" rate",a.label+" amount"]),"Total slots","Gross","Prorated copays","Total after copays","Advance","Repayment","Total submitted","Date submitted","Date paid","Total paid","Status","Notes","Bill.com paid","Bill.com date","Difference (Bill.com − invoiced)","Reconciled","Reconciliation notes"];
+  const rows=[head];
+  progs.forEach(site=>months.forEach(ym=>{ const inv=S.invoices[invId(site.id,ym)]; if(!inv) return; const c=calc(inv);
+    rows.push([site.name, ymLabel(ym), ...AGES.flatMap(a=>{ const n=Number(inv.lines?.[a.k]?.slots)||0, r=Number(inv.lines?.[a.k]?.rate)||0; return [n,r,r2(n*r)]; }),
+      c.slots,c.gross,c.copays,c.afterCopays,c.advance,c.repayment,c.submitted, inv.submittedDate||"", inv.paidDate||"", inv.status==="paid"?paidAmountOf(inv):"", STATUSES.find(s=>s.k===inv.status)?.label||"", inv.notes||"", hasBill(inv)?r2(inv.billcomAmount):"", inv.billcomDate||"", hasBill(inv)?r2(Number(inv.billcomAmount)-c.submitted):"", inv.reconciled?"Yes":"No", inv.reconNotes||""]); }));
+  const ws1=XLSX.utils.aoa_to_sheet(rows);
+  const moneyCols1=new Set(); head.forEach((h,i)=>{ if(/rate|amount|Gross|copays|Advance|Repayment|submitted$|Total paid|after copays|Bill\.com paid|Difference/i.test(h) && !/date/i.test(h)) moneyCols1.add(i); });
+  // Sheet 2: summary by program
+  const sum=[["Program","Payments entered","Payments paid","Total submitted","Total paid","Awaiting payment","Repaid so far"]];
+  progs.forEach(s=>{ const t=fyTotals(s.id); sum.push([s.name,t.count,t.paid,r2(t.submitted),r2(t.paidAmt||0),r2(t.submitted-(t.paidAmt||0)),repaidSoFar(s.id)]); });
+  const ws2=XLSX.utils.aoa_to_sheet(sum);
+  // Sheet 3: submitted by month grid
+  const grid=[["Program",...months.map(ymLabel),fyLabel(S.fy)+" total"]];
+  progs.forEach(s=>{ let tot=0; const r=months.map(ym=>{ const c=calc(S.invoices[invId(s.id,ym)]); if(!c) return ""; tot+=c.submitted; return c.submitted; }); grid.push([s.name,...r,r2(tot)]); });
+  const ws3=XLSX.utils.aoa_to_sheet(grid);
+  const fmt=(ws,isMoney)=>{ const rg=XLSX.utils.decode_range(ws["!ref"]); for(let R=1;R<=rg.e.r;R++) for(let C=0;C<=rg.e.c;C++){ const cell=ws[XLSX.utils.encode_cell({r:R,c:C})]; if(cell&&cell.t==="n"&&isMoney(C)) cell.z=money$; } };
+  fmt(ws1,C=>moneyCols1.has(C)); fmt(ws2,C=>C>=3); fmt(ws3,C=>C>=1);
+  ws1["!cols"]=head.map((h,i)=>({wch:i===0?18:/Notes|notes/.test(h)?40:Math.max(11,Math.min(18,h.length+2))}));
+  ws2["!cols"]=sum[0].map((h,i)=>({wch:i===0?18:16})); ws3["!cols"]=grid[0].map((h,i)=>({wch:i===0?18:13}));
+  [ws1,ws2,ws3].forEach(ws=>ws["!autofilter"]={ref:ws["!ref"]});
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws2,"Summary by program");
+  XLSX.utils.book_append_sheet(wb,ws1,"All payments");
+  XLSX.utils.book_append_sheet(wb,ws3,"Submitted by month");
+  const buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});
+  offerDownload(`MixedDelivery_Invoices_${fyLabel(S.fy)}.xlsx`, new Uint8Array(buf));
+}
+function exportCsv(){
+  const head=["Fiscal year","Month","Program",...AGES.flatMap(a=>[a.label+" slots",a.label+" rate"]),"Total slots","Gross","Prorated copays","Total after copays","Advance","Repayment","Total submitted","Status","Paid","Date submitted","Date paid","Total paid","Notes"];
+  const rows=[head];
+  fyMonths(S.fy).forEach(ym=>sitesSorted().forEach(site=>{
+    const inv=S.invoices[invId(site.id,ym)]; if(!inv) return; const c=calc(inv);
+    rows.push([fyLabel(S.fy), ymLabel(ym), site.name, ...AGES.flatMap(a=>[inv.lines[a.k]?.slots||0, inv.lines[a.k]?.rate||0]), c.slots, c.gross, c.copays, c.afterCopays, c.advance, c.repayment, c.submitted, STATUSES.find(s=>s.k===inv.status)?.label||"", inv.status==="paid"?"Yes":"No", inv.submittedDate||"", inv.paidDate||"", paidAmountOf(inv)||"", inv.notes||""]);
+  }));
+  offerDownload(`MixedDelivery_Invoices_${fyLabel(S.fy)}.csv`, rows.map(r=>r.map(csvCell).join(",")).join("\n"));
+}
+const LB_KEY="md-invoice-tracker-lastbackup";
+function showLastBackup(){
+  const el=$("#lastBackup"); if(!el) return; let d=null; try{ d=localStorage.getItem(LB_KEY); }catch{}
+  if(!d){ el.textContent="No backup made from this browser yet"; el.className="ab-note warn"; return; }
+  const days=Math.floor((Date.now()-new Date(d).getTime())/86400000);
+  el.textContent="Last backup: "+new Date(d).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})+(days>30?" — time for a new one":"");
+  el.className="ab-note"+(days>30?" warn":"");
+}
+function backup(){
+  const d=new Date().toISOString().slice(0,10);
+  offerDownload(`MixedDelivery_Invoice_Backup_${d}.json`, JSON.stringify({app:"md-invoice-tracker",version:1,exportedAt:new Date().toISOString(),sites:S.sites,invoices:S.invoices,settings:S.settings},null,2), ()=>{ try{ localStorage.setItem(LB_KEY,new Date().toISOString()); }catch{} showLastBackup(); });
+}
+async function restore(file){
+  try{
+    const d=JSON.parse(await file.text());
+    if(d.app!=="md-invoice-tracker" || !d.sites || !d.invoices) throw new Error("format");
+    if(!confirm(`Restore ${Object.keys(d.sites).length} sites and ${Object.keys(d.invoices).length} invoices? Matching records will be replaced; others are kept.`)) return;
+    Object.assign(S.sites,d.sites); Object.assign(S.invoices,d.invoices); if(d.settings) S.settings=d.settings;
+    render();
+    if(S.db){
+      for(const s of Object.values(d.sites)) await putDoc("sites",s.id,s);
+      for(const i of Object.values(d.invoices)) await putDoc("invoices",i.id,i);
+      if(d.settings) await putDoc("settings","main",d.settings);
+    } else saveLocal();
+    toast("Backup restored");
+  }catch(e){ toast("That file isn't a tracker backup"); }
+}
+
+/* ---------- events ---------- */
+function go(view){ S.view=view; render(); window.scrollTo(0,0); }
+document.addEventListener("click", async e=>{
+  if(e.target.closest("input,select,textarea,label")) return;
+  const t=e.target.closest("button,[data-enter],[data-month],[data-go],[data-paymonth],[data-recmonth]"); if(!t) return;
+  if(t.dataset.copy!==undefined){ e.stopPropagation(); copyAmount(Number(t.dataset.copy)); return; }
+  if(t.dataset.go){ if(t.dataset.recmonthGo) S.recMonth=t.dataset.recmonthGo; go(t.dataset.go); return; }
+  if(t.dataset.month){ S.month=t.dataset.month; render(); return; }
+  if(t.dataset.paymonth){ S.payMonth=t.dataset.paymonth; render(); return; }
+  if(t.dataset.recmonth){ S.recMonth=t.dataset.recmonth; render(); return; }
+  if(t.dataset.enter){ const [sid,ym]=t.dataset.enter.split("|"); openInvoice(sid,ym); return; }
+  if(t.dataset.editsite){ openSite(t.dataset.editsite); return; }
+  const act=t.dataset.act;
+  if(act==="close") closeDrawer();
+  if(act==="addSite") openSite(null);
+  if(act==="copyPrev"){ const p=S.invoices[invId(draft.siteId,prevYm(draft.month))]; if(p){ draft.lines=JSON.parse(JSON.stringify(p.lines)); drawDrawer(); toast("Copied last month's slots"); } }
+  if(act==="saveInv"){
+    if(draft.status==="paid" && !draft.paidDate) draft.paidDate=new Date().toISOString().slice(0,10);
+    const inv={...draft}; delete inv.isNew; closeDrawer();
+    try{ await saveInvoice(inv); toast("Payment saved"); }catch{}
+  }
+  if(act==="delInv"){ if(confirm("Delete this payment? This can't be undone.")){ const id=draft.id; closeDrawer(); try{ await deleteInvoice(id); toast("Payment deleted"); }catch{} } }
+  if(act==="saveSite"){
+    if(!String(siteDraft.name).trim()){ toast("Give the program a name"); return; }
+    const isNew=!siteDraft.id; if(isNew) siteDraft.id=slug(siteDraft.name);
+    const s={...siteDraft, name:siteDraft.name.trim(), repayMonthly:r2(siteDraft.repayMonthly), repayTotal:r2(siteDraft.repayTotal)};
+    closeDrawer(); try{ await saveSite(s); toast(isNew?"Program added":"Program saved"); if(isNew) go("p:"+s.id); }catch{}
+  }
+});
+document.addEventListener("keydown", e=>{
+  if((e.key==="Enter"||e.key===" ") && e.target.matches("g.bar")){ e.preventDefault(); S.month=e.target.dataset.month; render(); }
+  if(e.key==="Escape" && $("#drawer").classList.contains("open")) closeDrawer();
+});
+document.addEventListener("input", e=>{
+  const el=e.target;
+  if(draft && el.dataset.line){ draft.lines[el.dataset.line][el.dataset.f]= el.value===""?0:Number(el.value); drawReceipt();
+    if(el.dataset.f==="rate"){ const a=AGES.find(x=>x.k===el.dataset.line); const td=el.closest("tr").firstElementChild; const diff=Number(el.value)!==Number(S.settings.rates[a.k]); td.innerHTML=a.label+(diff?`<span class="custom">differs from default ${money(S.settings.rates[a.k])}</span>`:""); } return; }
+  if(draft && el.dataset.top){ const f=el.dataset.top; const isNum=["copays","advance","repayment"].includes(f); draft[f]= isNum? (el.value===""?0:Number(el.value)) : el.value; if(isNum) drawReceipt(); return; }
+  if(siteDraft && el.dataset.s){ siteDraft[el.dataset.s]= el.type==="checkbox"? el.checked : el.value; return; }
+});
+document.addEventListener("change", async e=>{
+  const el=e.target;
+  if(el.id==="fySel"){ S.fy=Number(el.value); S.recMonth=null; if(fyOf(S.month)!==S.fy) S.month=fyMonths(S.fy)[0]; render(); }
+  if(el.dataset.rec){ const [id,f]=el.dataset.rec.split("|"); const cur=S.invoices[id]; if(!cur) return;
+    const inv={...cur};
+    if(f==="billcomAmount") inv.billcomAmount= el.value===""?"":r2(el.value);
+    if(f==="billcomDate") inv.billcomDate=el.value;
+    if(f==="reconNotes") inv.reconNotes=el.value;
+    if(f==="reconciled"){ inv.reconciled=el.checked; inv.reconciledDate= el.checked? new Date().toISOString().slice(0,10) : ""; }
+    try{ await saveInvoice(inv); toast(f==="reconciled"?(el.checked?"Marked reconciled":"Reconciled cleared"):f==="reconNotes"?"Note saved":"Saved"); }catch{}
+    return; }
+  if(el.dataset.pay){ const [id,f]=el.dataset.pay.split("|"); const cur=S.invoices[id]; if(!cur) return;
+    const inv={...cur};
+    if(f==="notes") inv.notes=el.value;
+    if(f==="submittedDate"){ inv.submittedDate=el.value; if(el.value && (inv.status==="draft"||inv.status==="ready")) inv.status="submitted"; if(!el.value && inv.status==="submitted") inv.status="ready"; }
+    if(f==="paidDate"){ inv.paidDate=el.value; if(el.value) inv.status="paid"; else if(inv.status==="paid"){ inv.status= inv.submittedDate?"submitted":"ready"; inv.paidAmount=""; } }
+    if(f==="paidAmount"){ inv.paidAmount= el.value===""?"":r2(el.value); if(el.value!=="" && inv.status!=="paid"){ inv.status="paid"; if(!inv.paidDate) inv.paidDate=new Date().toISOString().slice(0,10); } }
+    try{ await saveInvoice(inv); toast(f==="notes"?"Note saved":"Saved"); }catch{}
+    return; }
+  if(el.dataset.paid){ const cur=S.invoices[el.dataset.paid]; if(!cur) return;
+    const inv={...cur, paidDate:el.value};
+    if(el.value){ inv.status="paid"; } else if(cur.status==="paid"){ inv.status="submitted"; }
+    try{ await saveInvoice(inv); toast(el.value?"Marked paid "+fmtDate(el.value):"Payment date cleared"); }catch{}
+    return; }
+  if(el.id==="metric"){ S.gridMetric=el.value; render(); }
+  if(el.dataset.rate){ S.settings.rates={...S.settings.rates,[el.dataset.rate]:r2(el.value)}; try{ await saveSettings(); toast("Default rate updated"); }catch{} }
+  if(el.id==="restoreFile" && el.files[0]){ await restore(el.files[0]); el.value=""; }
+});
+$("#scrim").addEventListener("click", closeDrawer);
+$("#exportCsv").onclick=exportExcel;
+$("#backupBtn").onclick=backup;
+$("#restoreBtn").onclick=()=>$("#restoreFile").click();
+
+/* ---------- boot ---------- */
+S.month=todayYm(); S.fy=fyOf(S.month);
+loadLocal();
+render();
+showLastBackup();
+connectDb();
+</script>
+</body>
+</html>
